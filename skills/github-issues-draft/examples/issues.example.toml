@@ -1,0 +1,19 @@
+[defaults]
+repo = "octo-org/platform"
+labels = ["needs-triage", "agent-draft"]
+
+[[issues]]
+title = "Improve error message when draft schema validation fails"
+body = """Validation failures should point directly to the invalid key path and expected type so contributors can fix draft files quickly without reading script internals. See [TOML v1.0.0](https://toml.io/en/v1.0.0) for syntax expectations and [current validator implementation](https://github.com/octo-org/platform/blob/0123456789abcdef0123456789abcdef01234567/skills/github-issues-draft/scripts/publish_issues.py#L1-L220) for context."""
+
+[[issues]]
+repo = "octo-org/mobile"
+title = "Clarify mobile release checklist ownership"
+body = """The release checklist should explicitly name who owns each step so late handoffs are reduced during release day. Update [Release Process](https://github.com/octo-org/mobile/blob/89abcdef0123456789abcdef0123456789abcdef/docs/release-process.md) to define ownership for each checklist stage."""
+
+[[issues]]
+title = "Document fallback strategy for failed issue publishing runs"
+body = """When issue publishing partially fails, maintainers need a clear recovery path that preserves auditability and avoids duplicate issues.
+
+### Recovery notes
+Document how to rerun with the same TOML, identify already-created issues, and continue publishing only the failed entries."""
