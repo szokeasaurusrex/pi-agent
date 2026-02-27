@@ -16,7 +16,7 @@ Use this skill when the user wants issue drafts prepared for review before publi
    - else if `docs/issues/.gitignore` is missing: create it and add an entry to ignore the generated draft filename
    - else update it so the generated draft filename is ignored
 4. Validate draft TOML before finishing (path resolved relative to this `SKILL.md`):
-   - `python3 ./scripts/publish_issues.py --validate <draft-path>`
+   - `python3 scripts/publish_issues.py --validate <draft-path>`
 5. Return the draft path, a compact summary for user review, and a copy-pasteable publish command that uses the absolute script path (for example: `python3 /absolute/path/to/skills/github-issues-draft/scripts/publish_issues.py <draft-path>`).
 
 ## Writing guidance
@@ -58,11 +58,11 @@ Rules:
 ## Host script
 
 Script path (relative to this `SKILL.md`):
-- `./scripts/publish_issues.py`
+- `scripts/publish_issues.py`
 
 Modes:
-- Validate only: `python3 ./scripts/publish_issues.py --validate <file>` (alias: `--dry-run`)
-- Publish: `python3 ./scripts/publish_issues.py <file>`
+- Validate only: `python3 scripts/publish_issues.py --validate <file>` (alias: `--dry-run`)
+- Publish: `python3 scripts/publish_issues.py <file>`
 
 Publish behavior:
 - one confirmation per invocation (shows issue count + titles)

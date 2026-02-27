@@ -12,7 +12,7 @@ Use this skill whenever creating or amending a commit.
 Run:
 
 ```bash
-./scripts/fetch-commit-guidelines.sh
+scripts/fetch-commit-guidelines.sh
 ```
 
 Use that output as the source of truth for commit format/rules.
@@ -33,13 +33,13 @@ Commit messages are reused as PR descriptions, so optimize for skimmability:
 Run:
 
 ```bash
-./scripts/commit-footer-from-issue.sh <github-issue-number>
+scripts/commit-footer-from-issue.sh <github-issue-number>
 ```
 
 Or specify repo explicitly:
 
 ```bash
-./scripts/commit-footer-from-issue.sh <github-issue-number> owner/repo
+scripts/commit-footer-from-issue.sh <github-issue-number> owner/repo
 ```
 
 Append the output at the end of the commit message.
