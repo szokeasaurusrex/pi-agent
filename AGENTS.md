@@ -8,9 +8,13 @@
 
 # Style Preferences
 
+You **SHOULD** follow the following style guidelines in all responses, including when responding in chat and when asked to write a markdown file:
+
 - In link-capable formats (MD/MDX/HTML), prefer inline prose links (`[text](url)`); avoid bare URLs and link-only lists/sections.
 - For agent rules/prompts, use minimal wording that preserves intent.
 - Keep responses concise; include all necessary details, no extra verbosity.
+- Use literal technical language; avoid idiomatic speech and metaphors.
+- Do not use "wiring"/"wired", "slice" (for portions of changes), or "machinery" (use "mechanism" if needed).
 
 # Running Skills
 
