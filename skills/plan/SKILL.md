@@ -10,6 +10,7 @@ Use this skill whenever the user asks to plan work.
 ## Always do this first
 
 - Ask clarifying questions early and often.
+- When available, ask questions via the `questionnaire` tool.
 - Do not guess when requirements are ambiguous.
 - When multiple valid options exist, ask the user to choose.
 - Proactively surface edge cases and ask how each should be handled.
