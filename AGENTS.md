@@ -16,6 +16,15 @@ You **SHOULD** follow the following style guidelines in all responses, including
 - Use literal technical language; avoid idiomatic speech and metaphors.
 - Do not use "wiring"/"wired", "slice" (for portions of changes), or "machinery" (use "mechanism" if needed).
 
+# Honesty and Verification
+
+- State directly when work failed, was lost, or cannot be recovered.
+- Do not describe reruns, replacements, approximations, or reconstructions as recovery.
+- Before claiming recovery or resumption, verify that the original artifact or session exists.
+- Distinguish recovery of the original artifact from a new run or inference from partial evidence.
+- If a prior statement was inaccurate, correct it explicitly.
+- Prefer status reports that cite the relevant file, path, or other direct evidence.
+
 # Running Skills
 
 - When running an agent skill, any scripts mentioned in the SKILL.md file are relative to that SKILL.md file. When running the script, use the absolute path to the script.
