@@ -8,8 +8,10 @@ import {
 	DEFAULT_MAX_LINES,
 	formatSize,
 	getAgentDir,
+	keyHint,
 	truncateTail,
 } from "@mariozechner/pi-coding-agent";
+import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 
 interface ExecSkillScriptInput {
@@ -33,6 +35,22 @@ interface SkillResolution {
 	skillName: string;
 	skillDir: string;
 	skillFile: string;
+}
+
+interface ExecSkillScriptDetails {
+	skill: string;
+	skillFile: string;
+	skillDir: string;
+	scriptPath: string;
+	command: string;
+	args: string[];
+	timeoutMs?: number;
+	exitCode: number | null;
+	stdoutBytes: number;
+	stderrBytes: number;
+	truncated: boolean;
+	fullOutputPath?: string;
+	timedOut?: boolean;
 }
 
 function stripLeadingAt(value: string): string {
@@ -162,6 +180,46 @@ async function storeFullOutput(output: string): Promise<string> {
 	return filePath;
 }
 
+async function buildOutputText(stdout: string, stderr: string): Promise<{
+	text: string;
+	truncated: boolean;
+	fullOutputPath?: string;
+}> {
+	const fullOutput = [stdout || "", stderr ? `STDERR:\n${stderr}` : ""]
+		.filter(Boolean)
+		.join(stdout && stderr ? "\n\n" : "");
+
+	const truncation = truncateTail(fullOutput, {
+		maxLines: DEFAULT_MAX_LINES,
+		maxBytes: DEFAULT_MAX_BYTES,
+	});
+
+	let text = truncation.content;
+	let fullOutputPath: string | undefined;
+	if (truncation.truncated) {
+		fullOutputPath = await storeFullOutput(fullOutput);
+		text += `\n\n[Output truncated: showing ${truncation.outputLines} of ${truncation.totalLines} lines (${formatSize(truncation.outputBytes)} of ${formatSize(truncation.totalBytes)}). Full output saved to: ${fullOutputPath}]`;
+	}
+
+	return {
+		text,
+		truncated: truncation.truncated,
+		fullOutputPath,
+	};
+}
+
+function formatTimeout(timeoutMs?: number): string {
+	if (!timeoutMs) return "";
+	if (timeoutMs % 1000 === 0) return `${timeoutMs / 1000}s`;
+	return `${timeoutMs}ms`;
+}
+
+function formatTimeoutMessage(timeoutMs?: number): string {
+	if (!timeoutMs) return "Command timed out";
+	if (timeoutMs % 1000 === 0) return `Command timed out after ${timeoutMs / 1000} seconds`;
+	return `Command timed out after ${timeoutMs} milliseconds`;
+}
+
 export default function execSkillScriptExtension(pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "exec_skill_script",
@@ -189,46 +247,110 @@ export default function execSkillScriptExtension(pi: ExtensionAPI) {
 			await access(scriptPath, constants.X_OK);
 
 			const args = argv.slice(1);
-			const result = await pi.exec(scriptPath, args, {
-				signal,
-				timeout: params.timeoutMs,
-			});
+			let result: Awaited<ReturnType<typeof pi.exec>>;
+			try {
+				result = await pi.exec(scriptPath, args, {
+					signal,
+					timeout: params.timeoutMs,
+				});
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				if (message.startsWith("timeout:")) {
+					const stdout = typeof (error as { stdout?: unknown }).stdout === "string" ? (error as { stdout: string }).stdout : "";
+					const stderr = typeof (error as { stderr?: unknown }).stderr === "string" ? (error as { stderr: string }).stderr : "";
+					const output = await buildOutputText(stdout, stderr);
+					const timeoutMessage = formatTimeoutMessage(params.timeoutMs);
+					throw new Error(output.text ? `${output.text}\n\n${timeoutMessage}` : timeoutMessage);
+				}
+				throw error;
+			}
 
-			const fullOutput = [result.stdout || "", result.stderr ? `STDERR:\n${result.stderr}` : ""]
-				.filter(Boolean)
-				.join(result.stdout && result.stderr ? "\n\n" : "");
+			const output = await buildOutputText(result.stdout || "", result.stderr || "");
+			const text = output.text;
+			const fullOutputPath = output.fullOutputPath;
 
-			const truncation = truncateTail(fullOutput, {
-				maxLines: DEFAULT_MAX_LINES,
-				maxBytes: DEFAULT_MAX_BYTES,
-			});
-
-			let text = truncation.content;
-			let fullOutputPath: string | undefined;
-			if (truncation.truncated) {
-				fullOutputPath = await storeFullOutput(fullOutput);
-				text += `\n\n[Output truncated: showing ${truncation.outputLines} of ${truncation.totalLines} lines (${formatSize(truncation.outputBytes)} of ${formatSize(truncation.totalBytes)}). Full output saved to: ${fullOutputPath}]`;
+			if (result.killed && params.timeoutMs) {
+				const timeoutMessage = formatTimeoutMessage(params.timeoutMs);
+				throw new Error(text ? `${text}\n\n${timeoutMessage}` : timeoutMessage);
 			}
 
 			if (result.code !== 0) {
-				throw new Error(text);
+				throw new Error(text || `exec_skill_script failed with exit code ${result.code}`);
 			}
+
+			const details: ExecSkillScriptDetails = {
+				skill: skill.skillName,
+				skillFile: skill.skillFile,
+				skillDir: skill.skillDir,
+				scriptPath,
+				command: params.command,
+				args,
+				timeoutMs: params.timeoutMs,
+				exitCode: result.code,
+				stdoutBytes: Buffer.byteLength(result.stdout || "", "utf-8"),
+				stderrBytes: Buffer.byteLength(result.stderr || "", "utf-8"),
+				truncated: output.truncated,
+				fullOutputPath,
+				timedOut: false,
+			};
 
 			return {
 				content: [{ type: "text", text }],
-				details: {
-					skill: skill.skillName,
-					skillFile: skill.skillFile,
-					skillDir: skill.skillDir,
-					scriptPath,
-					args,
-					exitCode: result.code,
-					stdoutBytes: Buffer.byteLength(result.stdout || "", "utf-8"),
-					stderrBytes: Buffer.byteLength(result.stderr || "", "utf-8"),
-					truncated: truncation.truncated,
-					fullOutputPath,
-				},
+				details,
 			};
+		},
+
+		renderCall(rawArgs, theme) {
+			const args = rawArgs as ExecSkillScriptInput;
+			const timeoutSuffix = args.timeoutMs ? theme.fg("dim", ` (timeout ${formatTimeout(args.timeoutMs)})`) : "";
+			return new Text(
+				theme.fg("toolTitle", theme.bold("exec_skill_script ")) +
+					theme.fg("accent", args.skill || "...") +
+					theme.fg("muted", " ") +
+					theme.fg("dim", args.command || "...") +
+					timeoutSuffix,
+				0,
+				0,
+			);
+		},
+
+		renderResult(result, { expanded, isPartial }, theme) {
+			if (isPartial) {
+				return new Text(theme.fg("warning", "Running skill script..."), 0, 0);
+			}
+
+			const details = result.details as ExecSkillScriptDetails | undefined;
+			const textContent = result.content.find((content) => content.type === "text");
+			const rawOutput = textContent && textContent.type === "text" ? textContent.text : "";
+			const lines = rawOutput ? rawOutput.split("\n") : [];
+			const previewLines = 5;
+			const hiddenLines = Math.max(0, lines.length - previewLines);
+
+			let text = "";
+			if (!expanded && hiddenLines > 0) {
+				text += theme.fg("muted", `... (${hiddenLines} earlier lines, ${keyHint("expandTools", "to expand")})`);
+				text += "\n";
+			}
+
+			const visibleLines = expanded ? lines : lines.slice(-previewLines);
+			if (visibleLines.length > 0) {
+				text += visibleLines.map((line) => theme.fg("toolOutput", line)).join("\n");
+			}
+
+			if (details?.truncated || details?.fullOutputPath) {
+				if (text) text += "\n\n";
+				if (details.fullOutputPath) {
+					text += theme.fg("warning", `Full output: ${details.fullOutputPath}`);
+				} else if (details.truncated) {
+					text += theme.fg("warning", "Output truncated");
+				}
+			}
+
+			if (!text) {
+				text = theme.fg("muted", "(no output)");
+			}
+
+			return new Text(text, 0, 0);
 		},
 	});
 }
