@@ -1,7 +1,16 @@
 {
-  "lastChangelogVersion": "0.56.1",
+  "lastChangelogVersion": "0.58.3",
   "hideThinkingBlock": false,
   "defaultThinkingLevel": "medium",
   "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.3-codex"
+  "defaultModel": "gpt-5.4",
+  "enabledModels": [
+    "openai-codex/gpt-5.4",
+    "openai-codex/gpt-5.3-codex-spark",
+    "openai-codex/gpt-5.3-codex",
+    "anthropic/claude-opus-4-6",
+    "anthropic/claude-sonnet-4-6",
+    "anthropic/claude-haiku-4-5",
+    "openai-codex/gpt-5.1-codex-mini"
+  ]
 }
