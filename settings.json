@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "0.58.3",
+  "lastChangelogVersion": "0.58.4",
   "hideThinkingBlock": false,
   "defaultThinkingLevel": "medium",
   "defaultProvider": "openai-codex",
