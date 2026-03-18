@@ -40,7 +40,13 @@ Use sub-agents for focused delegation, parallel work, role separation, prompt is
 
 ## Recovery
 
-- If a sub-agent fails or times out, continue the session. You may also decide on a different approach.
+- If a sub-agent fails or times out, continue the session.
+  - Note: thinking level does not persist on the new call.
+- You may add a new prompt when continuing the session. Here are some useful sample prompts you can use with some tweaking
+  - If you just want to let the subagent continue, say, "You were interrupted, please continue" (useful for complex tasks).
+  - You can find out where the agent is by asking, "You were interrupted. Give a quick status update. Do not proceed until I ask you" (with minimal/low thinking level), then, based on the reply, decide what to do next.
+  - You can speed things along by saying, "You were interrupted. Stop researching/planning/etc and state what you know given your current knowledge and what open questions remain" (again, a lower thinking level is suitable).
+- If the subagent produces nothing helpful, you may consider starting a new subagent incorporating learnings from the previous one, or you can finish the task yourself.
 
 ## Invocation
 
