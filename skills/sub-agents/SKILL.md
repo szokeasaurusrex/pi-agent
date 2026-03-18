@@ -36,7 +36,6 @@ Use sub-agents for focused delegation, parallel work, role separation, prompt is
 ## Thinking
 
 - The script defaults to `medium`. This thinking level is suitable for most tasks.
-- Set `--thinking high` for planning, deep research, or other reasoning-heavy work.
 - Set `--thinking minimal` or `--thinking low` for mechanical edits, straightforward execution, or format conversion, as less thinking is faster.
 
 ## Recovery
@@ -46,7 +45,7 @@ Use sub-agents for focused delegation, parallel work, role separation, prompt is
 ## Invocation
 
 - Launch: `scripts/run-subagent.sh --prompt "<prompt>"`
-- Launch with explicit thinking: `scripts/run-subagent.sh --thinking high --prompt "<prompt>"`
+- Launch with explicit thinking: `scripts/run-subagent.sh --thinking minimal --prompt "<prompt>"`
 - Resume: `scripts/run-subagent.sh --resume ~/.pi/agent/subagent-sessions/<file>.json --prompt "<prompt>"`
-- Extra pi args: `scripts/run-subagent.sh --thinking low --prompt "<prompt>" -- --model sonnet`
+- Extra pi args: `scripts/run-subagent.sh --prompt "<prompt>" -- --model sonnet`
 - Pi help: `scripts/run-subagent.sh -- --help`
