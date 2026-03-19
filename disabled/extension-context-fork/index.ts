@@ -10,10 +10,14 @@
  */
 
 import type { ExtensionAPI, ExtensionContext, SessionManager } from "@mariozechner/pi-coding-agent";
+
+interface ExtensionAPIWithRebuildContext extends ExtensionAPI {
+	rebuildContext(): void;
+}
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 
-export default function contextForkExtension(pi: ExtensionAPI) {
+export default function contextForkExtension(pi: ExtensionAPIWithRebuildContext) {
 	// State: checkpoint name → entry ID
 	let checkpoints = new Map<string, string>();
 
@@ -296,11 +300,16 @@ export default function contextForkExtension(pi: ExtensionAPI) {
 				persistCheckpoints();
 			}
 
-			// Branch the session tree directly to the target entry
+			// Branch the session tree to the target entry
 			(ctx.sessionManager as SessionManager).branch(targetId);
 
-			// Inject the agent-provided summary as a custom message,
-			// including the auto-checkpoint name so the agent can navigate back
+			// Rebuild the agent's in-memory context from the new branch
+			pi.rebuildContext();
+
+			// Abort the current agent turn to prevent any stale-context response
+			ctx.abort();
+
+			// Inject the summary and trigger a fresh turn with rebuilt context
 			const returnNote = returnCheckpointName
 				? `\n\n[Navigated from checkpoint "${returnCheckpointName}".]`
 				: "";
