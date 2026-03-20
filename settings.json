@@ -1,9 +1,20 @@
 {
+  "packages": [
+    {
+      "source": "npm:mitsupi",
+      "extensions": [
+        "pi-extensions/answer.ts"
+      ],
+      "skills": [],
+      "prompts": [],
+      "themes": []
+    }
+  ],
   "lastChangelogVersion": "0.60.0",
   "hideThinkingBlock": false,
   "defaultThinkingLevel": "medium",
-  "defaultProvider": "anthropic",
-  "defaultModel": "claude-opus-4-6",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.4",
   "enabledModels": [
     "openai-codex/gpt-5.4",
     "openai-codex/gpt-5.3-codex-spark",
