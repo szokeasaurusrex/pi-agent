@@ -10,9 +10,9 @@
       "themes": []
     }
   ],
-  "lastChangelogVersion": "0.60.0",
+  "lastChangelogVersion": "0.66.1",
   "hideThinkingBlock": false,
-  "defaultThinkingLevel": "medium",
+  "defaultThinkingLevel": "high",
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.4",
   "enabledModels": [
