@@ -2,13 +2,6 @@
 
 Use this mode when the user asks only for a plan.
 
-## Output location
-
-- Write the finalized plan to `docs/plans/<timestamp>-<descriptive-name>.md`.
-- Generate the timestamp with `date -u +"%Y-%m-%dT%H-%M-%SZ"` and use it as the filename prefix.
-- Keep the descriptive suffix specific to the requested work.
-- Include the same timestamp inside the plan document near the top (for example: `Created: 2026-02-19T12-53-06Z`).
-
 ## Plan quality bar
 
 The plan must let another agent execute the work correctly with only:
@@ -32,14 +25,9 @@ The plan must therefore be:
 
 - Keep the plan as concise as possible without losing required detail.
 
-## Keep plan files uncommitted by default
+## Output location
 
-Unless the user asks otherwise, ensure plan artifacts are git-ignored via `docs/plans/.gitignore`.
+1. Run `scripts/init_plan.py --title "<plan title>"`.
+2. Write the plan to the returned path.
 
-Rules:
-- If `docs/plans` is newly created for this task, create `docs/plans/.gitignore` containing:
-  - `*`
-- Otherwise, if `docs/plans/.gitignore` is missing, create it and add entries that ignore:
-  - `.gitignore`
-  - the specific created plan file (for example `my-plan.md`)
-- If `docs/plans/.gitignore` already exists, update it as needed so the plan file is ignored.
+The script creates `docs/plans/<timestamp>-<descriptive-name>.md`, ensures the plan path is not tracked by default, and prints the plan path.
