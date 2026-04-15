@@ -224,10 +224,10 @@ export default function execSkillScriptExtension(pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "exec_skill_script",
 		label: "Exec Skill Script",
-		description: `Execute a skill script by resolving the script path relative to the skill's SKILL.md directory. Output is truncated to ${DEFAULT_MAX_LINES} lines or ${formatSize(DEFAULT_MAX_BYTES)}.`,
-		promptSnippet: "Execute a skill script by skill name and a relative script command.",
+		description: `Use this tool when a skill-referenced command invokes an executable by skill-relative path, such as scripts/*, regardless of file extension. Output is truncated to ${DEFAULT_MAX_LINES} lines or ${formatSize(DEFAULT_MAX_BYTES)}.`,
+		promptSnippet: "Use this tool when a skill-referenced command invokes an executable by skill-relative path.",
 		promptGuidelines: [
-			"Use this tool when you need to run a script referenced by a skill using a path relative to that skill's SKILL.md directory.",
+			"Use this tool when a skill-referenced command invokes an executable by skill-relative path, such as scripts/*, regardless of file extension.",
 			"Pass the skill name and a single script command string, for example skill='sub-agents' and command='scripts/run-subagent.sh --help'.",
 		],
 		parameters: ExecSkillScriptParams as unknown as Parameters<typeof pi.registerTool>[0]["parameters"],

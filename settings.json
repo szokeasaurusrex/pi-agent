@@ -10,7 +10,7 @@
       "themes": []
     }
   ],
-  "lastChangelogVersion": "0.66.1",
+  "lastChangelogVersion": "0.67.2",
   "hideThinkingBlock": false,
   "defaultThinkingLevel": "medium",
   "defaultProvider": "openai-codex",
