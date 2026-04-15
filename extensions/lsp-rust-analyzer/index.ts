@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { getMarkdownTheme } from "/usr/local/lib/node_modules/@mariozechner/pi-coding-agent/dist/index.js";
@@ -6,7 +6,7 @@ import { Type } from "@sinclair/typebox";
 import { Box, Markdown, Text } from "@mariozechner/pi-tui";
 import { RustAnalyzerClient, normalizeHoverContents } from "./client";
 import { DiagnosticsStore } from "./diagnostics";
-import { discoverRustProject, detectRustAnalyzer, resolveAbsolutePath } from "./discovery";
+import { discoverRustProject, detectRustAnalyzer, resolveAbsolutePath, stripLeadingAt } from "./discovery";
 import { DocumentTracker, fileUriToPath } from "./documents";
 import type {
 	CompactLocation,
@@ -34,36 +34,38 @@ const DIAGNOSTIC_WAIT_TIMEOUT_MS = 15_000;
 const AUTO_INJECT_MAX_TEXT_LENGTH = 1_500;
 const DEFAULT_RESULT_LIMIT = 20;
 const MAX_RESULT_LIMIT = 100;
+const RUST_LSP_TOOL_NAMES = ["lsp_find_symbol", "lsp_document_symbols", "lsp_hover", "lsp_definition", "lsp_references", "lsp_diagnostics"];
+const RUST_LSP_APPEND_PROMPT = "Rust LSP tools are available. Prefer them for Rust symbols, hover, definitions, references, and diagnostics.";
 
 const PathParams = Type.Object({
-	path: Type.String({ description: "File path. Leading @ is accepted." }),
+	path: Type.String({ description: "Rust file path. Leading @ is accepted." }),
 });
 
 const SymbolLookupParams = Type.Object({
-	name: Type.String({ description: "Rust symbol name to resolve semantically." }),
-	path: Type.Optional(Type.String({ description: "Optional file path to narrow the lookup. Strongly recommended when the target file is already known. Leading @ is accepted." })),
-	line: Type.Optional(Type.Number({ description: "Optional 1-based start line for disambiguating ambiguous symbol matches.", minimum: 1 })),
-	character: Type.Optional(Type.Number({ description: "Optional 1-based start character for disambiguating ambiguous symbol matches.", minimum: 1 })),
-	endLine: Type.Optional(Type.Number({ description: "Optional 1-based end line for a disambiguating line or line/column range.", minimum: 1 })),
-	endCharacter: Type.Optional(Type.Number({ description: "Optional 1-based end character for a disambiguating line/column range.", minimum: 1 })),
-	limit: Type.Optional(Type.Number({ description: "Maximum number of symbol matches to return.", minimum: 1, maximum: MAX_RESULT_LIMIT })),
+	name: Type.String({ description: "Rust symbol name." }),
+	path: Type.Optional(Type.String({ description: "Optional Rust file or directory path. Leading @ is accepted." })),
+	line: Type.Optional(Type.Number({ description: "1-based start line.", minimum: 1 })),
+	character: Type.Optional(Type.Number({ description: "1-based start character.", minimum: 1 })),
+	endLine: Type.Optional(Type.Number({ description: "1-based end line.", minimum: 1 })),
+	endCharacter: Type.Optional(Type.Number({ description: "1-based end character.", minimum: 1 })),
+	limit: Type.Optional(Type.Number({ description: "Maximum results.", minimum: 1, maximum: MAX_RESULT_LIMIT })),
 });
 
 const ReferencesParams = Type.Object({
-	name: Type.String({ description: "Rust symbol name whose references should be resolved semantically." }),
-	path: Type.Optional(Type.String({ description: "Optional file path to narrow the lookup. Strongly recommended when the target file is already known. Leading @ is accepted." })),
-	line: Type.Optional(Type.Number({ description: "Optional 1-based start line for disambiguating ambiguous symbol matches.", minimum: 1 })),
-	character: Type.Optional(Type.Number({ description: "Optional 1-based start character for disambiguating ambiguous symbol matches.", minimum: 1 })),
-	endLine: Type.Optional(Type.Number({ description: "Optional 1-based end line for a disambiguating line or line/column range.", minimum: 1 })),
-	endCharacter: Type.Optional(Type.Number({ description: "Optional 1-based end character for a disambiguating line/column range.", minimum: 1 })),
-	includeDeclaration: Type.Optional(Type.Boolean({ description: "Include the declaration site in the result set. Defaults to false." })),
-	limit: Type.Optional(Type.Number({ description: "Maximum number of references to return.", minimum: 1, maximum: MAX_RESULT_LIMIT })),
+	name: Type.String({ description: "Rust symbol name." }),
+	path: Type.Optional(Type.String({ description: "Optional Rust file or directory path. Leading @ is accepted." })),
+	line: Type.Optional(Type.Number({ description: "1-based start line.", minimum: 1 })),
+	character: Type.Optional(Type.Number({ description: "1-based start character.", minimum: 1 })),
+	endLine: Type.Optional(Type.Number({ description: "1-based end line.", minimum: 1 })),
+	endCharacter: Type.Optional(Type.Number({ description: "1-based end character.", minimum: 1 })),
+	includeDeclaration: Type.Optional(Type.Boolean({ description: "Include declaration." })),
+	limit: Type.Optional(Type.Number({ description: "Maximum results.", minimum: 1, maximum: MAX_RESULT_LIMIT })),
 });
 
 const DiagnosticsParams = Type.Object({
-	path: Type.Optional(Type.String({ description: "Optional file path. Leading @ is accepted." })),
-	includeHints: Type.Optional(Type.Boolean({ description: "Include LSP hint diagnostics. Defaults to false." })),
-	limit: Type.Optional(Type.Number({ description: "Maximum number of diagnostics to print.", minimum: 1, maximum: MAX_RESULT_LIMIT })),
+	path: Type.Optional(Type.String({ description: "Optional Rust file path. Leading @ is accepted." })),
+	includeHints: Type.Optional(Type.Boolean({ description: "Include hints." })),
+	limit: Type.Optional(Type.Number({ description: "Maximum results.", minimum: 1, maximum: MAX_RESULT_LIMIT })),
 });
 
 function sleep(ms: number): Promise<void> {
@@ -133,6 +135,10 @@ function locationLinkToCompact(location: LspLocationLink): CompactLocation {
 		selectionEndLine: location.targetSelectionRange.end.line + 1,
 		selectionEndCharacter: location.targetSelectionRange.end.character + 1,
 	};
+}
+
+function isLocationLink(value: LspLocation | LspLocationLink): value is LspLocationLink {
+	return "targetUri" in value && "targetRange" in value && "targetSelectionRange" in value;
 }
 
 function normalizeWorkspaceSymbol(symbol: LspSymbolInformation | LspWorkspaceSymbol): CompactSymbolResult {
@@ -241,6 +247,40 @@ function formatLookupScope(params: SymbolLookupInput, cwd: string): string {
 	return parts.join(" ");
 }
 
+type LookupPathKind = "workspace" | "file" | "directory";
+
+async function classifyLookupPath(inputPath: string, cwd: string): Promise<{ kind: "file" | "directory"; absolutePath: string }> {
+	const absolutePath = resolveAbsolutePath(inputPath, cwd);
+	try {
+		const info = await stat(absolutePath);
+		if (info.isFile()) return { kind: "file", absolutePath };
+		if (info.isDirectory()) return { kind: "directory", absolutePath };
+	} catch {
+		throw new Error(`Path not found: ${stripLeadingAt(inputPath.trim())}`);
+	}
+	throw new Error(`Path not found: ${stripLeadingAt(inputPath.trim())}`);
+}
+
+function isWithinDirectory(filePath: string, directoryPath: string): boolean {
+	const relativePath = path.relative(directoryPath, filePath);
+	return relativePath !== "" && !relativePath.startsWith("..") && !path.isAbsolute(relativePath);
+}
+
+function hasRangeDisambiguation(params: SymbolLookupInput): boolean {
+	return params.line !== undefined || params.character !== undefined || params.endLine !== undefined || params.endCharacter !== undefined;
+}
+
+function ambiguityRetryLine(pathKind: LookupPathKind): string {
+	switch (pathKind) {
+		case "directory":
+			return "Retry with a file path, or with a different directory path that narrows the subtree further.";
+		case "file":
+			return "Retry with a tighter file range.";
+		default:
+			return "Retry with path when known, or with a file path plus line or line/column range.";
+	}
+}
+
 function candidateWithinRange(symbol: CompactSymbolResult, params: SymbolLookupInput): boolean {
 	if (params.line === undefined) return true;
 	const startLine = params.line;
@@ -267,17 +307,26 @@ async function collectSymbolCandidates(
 	signal?: AbortSignal,
 ): Promise<CompactSymbolResult[]> {
 	await manager.ensureReady(ctx, params.path, signal);
-	const preferredPath = params.path ? resolveAbsolutePath(params.path, ctx.cwd) : undefined;
-	if (preferredPath) {
-		const synced = await manager.syncPath(ctx, preferredPath);
-		const rawSymbols = await manager.getClient().documentSymbols(synced.uri, signal);
-		let items: CompactSymbolResult[] = [];
-		if (rawSymbols.length > 0 && "selectionRange" in rawSymbols[0]!) {
-			items = flattenDocumentSymbols(rawSymbols as LspDocumentSymbol[]).map((item) => ({ ...item, path: synced.path }));
-		} else {
-			items = (rawSymbols as LspSymbolInformation[]).map(normalizeWorkspaceSymbol);
+	if (params.path) {
+		const scopedPath = await classifyLookupPath(params.path, ctx.cwd);
+		if (scopedPath.kind === "file") {
+			const synced = await manager.syncPath(ctx, scopedPath.absolutePath);
+			const rawSymbols = await manager.getClient().documentSymbols(synced.uri, signal);
+			let items: CompactSymbolResult[] = [];
+			if (rawSymbols.length > 0 && "selectionRange" in rawSymbols[0]!) {
+				items = flattenDocumentSymbols(rawSymbols as LspDocumentSymbol[]).map((item) => ({ ...item, path: synced.path }));
+			} else {
+				items = (rawSymbols as LspSymbolInformation[]).map(normalizeWorkspaceSymbol);
+			}
+			return filterNamedSymbols(items, params.name).filter((item) => candidateWithinRange(item, params));
 		}
-		return filterNamedSymbols(items, params.name).filter((item) => candidateWithinRange(item, params));
+		if (hasRangeDisambiguation(params)) {
+			throw new Error("Directory-scoped lookup does not support line or character disambiguation. Use a file path for range-based disambiguation.");
+		}
+		const workspace = (await manager.getClient().workspaceSymbols(params.name, signal))
+			.map(normalizeWorkspaceSymbol)
+			.filter((item) => isWithinDirectory(item.path, scopedPath.absolutePath));
+		return filterNamedSymbols(workspace, params.name).filter((item) => candidateWithinRange(item, params));
 	}
 	const workspace = (await manager.getClient().workspaceSymbols(params.name, signal)).map(normalizeWorkspaceSymbol);
 	return filterNamedSymbols(workspace, params.name).filter((item) => candidateWithinRange(item, params));
@@ -288,20 +337,22 @@ async function resolveNamedSymbol(
 	ctx: ExtensionContext,
 	params: SymbolLookupInput,
 	signal?: AbortSignal,
-): Promise<{ resolved?: ResolvedSymbol; candidates: CompactSymbolResult[]; message?: string }> {
+): Promise<{ resolved?: ResolvedSymbol; candidates: CompactSymbolResult[]; message?: string; pathKind: LookupPathKind }> {
+	const pathKind = params.path ? (await classifyLookupPath(params.path, ctx.cwd)).kind : "workspace";
 	const candidates = await collectSymbolCandidates(manager, ctx, params, signal);
 	if (candidates.length === 0) {
-		return { candidates, message: `No Rust symbols matched ${formatLookupScope(params, ctx.cwd)}.` };
+		return { candidates, pathKind, message: `No Rust symbols matched ${formatLookupScope(params, ctx.cwd)}.` };
 	}
 	if (candidates.length !== 1) {
 		return {
 			candidates,
-			message: `Ambiguous Rust symbol lookup for ${formatLookupScope(params, ctx.cwd)}. Narrow it with path when known, or provide line or line/column range disambiguation.`,
+			pathKind,
+			message: `Ambiguous Rust symbol lookup for ${formatLookupScope(params, ctx.cwd)}. ${ambiguityRetryLine(pathKind)}`,
 		};
 	}
 	const symbol = candidates[0]!;
 	const synced = await manager.syncPath(ctx, symbol.path);
-	return { candidates, resolved: { symbol, synced } };
+	return { candidates, pathKind, resolved: { symbol, synced } };
 }
 
 class RustAnalyzerManager {
@@ -434,19 +485,22 @@ class RustAnalyzerManager {
 	}> {
 		this.rememberContext(ctx);
 		if (params.path) {
-			await this.ensureReady(ctx, params.path, ctx.signal);
+			const scopedPath = await classifyLookupPath(params.path, ctx.cwd);
+			if (scopedPath.kind === "directory") {
+				throw new Error("lsp_diagnostics path must be a Rust file path. Omit path to inspect the tracked Rust document set.");
+			}
+			await this.ensureReady(ctx, scopedPath.absolutePath, ctx.signal);
 			const minUpdatedAt = Date.now();
-			const document = await this.getDocuments().ensureSynced(params.path);
+			const document = await this.getDocuments().ensureSynced(scopedPath.absolutePath);
 			await this.diagnostics.waitForPathFresh(document.path, {
 				minVersion: document.version,
 				minUpdatedAt,
 				timeoutMs: DIAGNOSTIC_WAIT_TIMEOUT_MS,
 			});
 			await sleep(DIAGNOSTIC_SETTLE_MS);
-			const absolutePath = resolveAbsolutePath(params.path, ctx.cwd);
 			const summary = this.diagnostics.summarize({
-				paths: [absolutePath],
-				detailPaths: [absolutePath],
+				paths: [scopedPath.absolutePath],
+				detailPaths: [scopedPath.absolutePath],
 				includeHints: params.includeHints,
 				limit: clampLimit(params.limit, 20),
 			});
@@ -636,6 +690,25 @@ class RustAnalyzerManager {
 	}
 }
 
+async function updateRustLspToolActivation(pi: ExtensionAPI, ctx: ExtensionContext, _signal?: AbortSignal): Promise<{ rustLspActive: boolean }> {
+	const activeTools = new Set(pi.getActiveTools());
+	const project = await discoverRustProject(ctx.cwd);
+	if (!project) {
+		for (const toolName of RUST_LSP_TOOL_NAMES) activeTools.delete(toolName);
+		pi.setActiveTools([...activeTools]);
+		return { rustLspActive: false };
+	}
+	const detection = await detectRustAnalyzer();
+	if ("error" in detection) {
+		for (const toolName of RUST_LSP_TOOL_NAMES) activeTools.delete(toolName);
+		pi.setActiveTools([...activeTools]);
+		return { rustLspActive: false };
+	}
+	for (const toolName of RUST_LSP_TOOL_NAMES) activeTools.add(toolName);
+	pi.setActiveTools([...activeTools]);
+	return { rustLspActive: true };
+}
+
 export default function lspRustAnalyzerExtension(pi: ExtensionAPI) {
 	const manager = new RustAnalyzerManager(pi);
 
@@ -646,6 +719,7 @@ export default function lspRustAnalyzerExtension(pi: ExtensionAPI) {
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
+		await updateRustLspToolActivation(pi, ctx, ctx.signal);
 		manager.rememberContext(ctx);
 		await manager.maybeActivateFromCwd(ctx);
 	});
@@ -656,11 +730,12 @@ export default function lspRustAnalyzerExtension(pi: ExtensionAPI) {
 	});
 
 	pi.on("before_agent_start", async (event, ctx) => {
+		const { rustLspActive } = await updateRustLspToolActivation(pi, ctx, ctx.signal);
 		manager.rememberContext(ctx);
 		await manager.maybeActivateFromCwd(ctx, ctx.signal);
-		if (!manager.isActive()) return;
+		if (!rustLspActive) return;
 		return {
-			systemPrompt: `${event.systemPrompt}\n\nRust LSP tools are available. For Rust code, prefer lsp_find_symbol, lsp_document_symbols, lsp_definition, lsp_references, lsp_hover, and lsp_diagnostics over bash search for symbols, definitions, references, types, and compile diagnostics. Prefer symbol-name lookups over raw positions. When the target Rust file is already known, provide path to lsp_find_symbol, lsp_definition, lsp_references, or lsp_hover to narrow the search and reduce ambiguity. Use read after LSP narrows the target file or definition snippet.`,
+			systemPrompt: `${event.systemPrompt}\n\n${RUST_LSP_APPEND_PROMPT}`,
 		};
 	});
 
@@ -678,14 +753,14 @@ export default function lspRustAnalyzerExtension(pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "lsp_find_symbol",
 		label: "LSP Find Symbol",
-		description: "Find Rust symbols by semantic name, with optional file or range disambiguation.",
-		promptSnippet: "Find a Rust symbol by name semantically, preferably scoped to a known file path.",
-		promptGuidelines: ["When the target Rust file is already known, provide path to narrow the lookup; add line or line/column range only when needed to disambiguate multiple matches."],
+		description: "Find Rust symbols by name.",
+		promptSnippet: "Find Rust symbols by name.",
 		parameters: SymbolLookupParams,
 		renderCall(args, theme) {
 			return renderToolCallSummary(theme, "lsp_find_symbol", formatLookupScope(args, process.cwd()));
 		},
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+			const pathKind = params.path ? (await classifyLookupPath(params.path, ctx.cwd)).kind : "workspace";
 			const candidates = await collectSymbolCandidates(manager, ctx, params, signal);
 			const limit = clampLimit(params.limit);
 			const shown = candidates.slice(0, limit);
@@ -697,7 +772,7 @@ export default function lspRustAnalyzerExtension(pi: ExtensionAPI) {
 					: `Ambiguous Rust symbol lookup for ${formatLookupScope(params, ctx.cwd)} (${shown.length}${candidates.length > shown.length ? ` of ${candidates.length}` : ""})`;
 			const lines = [header, resolved, ...shown.map((item) => formatCompactSymbol(item, ctx.cwd))].filter(Boolean) as string[];
 			if (candidates.length > shown.length) lines.push(`… ${candidates.length - shown.length} more symbol match(es) omitted`);
-			if (candidates.length > 1) lines.push("Provide path when known, or a line or line/column range, to make the lookup unambiguous.");
+			if (candidates.length > 1) lines.push(ambiguityRetryLine(pathKind));
 			return {
 				content: [{ type: "text", text: lines.join("\n") }],
 				details: {
@@ -714,15 +789,18 @@ export default function lspRustAnalyzerExtension(pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "lsp_document_symbols",
 		label: "LSP Document Symbols",
-		description: "Semantic Rust symbol outline for a file.",
-		promptSnippet: "Get a semantic Rust symbol outline for a file via rust-analyzer.",
-		promptGuidelines: ["Prefer this tool over read when you only need the symbol outline of a Rust file."],
+		description: "Show a Rust file's symbol outline.",
+		promptSnippet: "Show a Rust file's symbol outline.",
 		parameters: PathParams,
 		renderCall(args, theme) {
 			return renderToolCallSummary(theme, "lsp_document_symbols", args.path);
 		},
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-			const synced = await manager.syncPath(ctx, params.path);
+			const scopedPath = await classifyLookupPath(params.path, ctx.cwd);
+			if (scopedPath.kind === "directory") {
+				throw new Error("lsp_document_symbols requires a Rust file path. Directory paths are not supported.");
+			}
+			const synced = await manager.syncPath(ctx, scopedPath.absolutePath);
 			const rawSymbols = await manager.getClient().documentSymbols(synced.uri, signal);
 			let items: Array<CompactSymbolResult & { depth: number }> = [];
 			if (rawSymbols.length > 0 && "selectionRange" in rawSymbols[0]!) {
@@ -750,9 +828,8 @@ export default function lspRustAnalyzerExtension(pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "lsp_hover",
 		label: "LSP Hover",
-		description: "Rust hover information for a symbol name, with optional file or range disambiguation.",
-		promptSnippet: "Inspect Rust type and documentation information for a symbol name, preferably scoped to a known file path.",
-		promptGuidelines: ["Use symbol-name lookup first; provide path when known, and add line or line/column range only when disambiguation is needed."],
+		description: "Show Rust hover info for a symbol.",
+		promptSnippet: "Show Rust hover info for a symbol.",
 		parameters: SymbolLookupParams,
 		renderCall(args, theme) {
 			return renderToolCallSummary(theme, "lsp_hover", formatLookupScope(args, process.cwd()));
@@ -794,9 +871,8 @@ export default function lspRustAnalyzerExtension(pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "lsp_definition",
 		label: "LSP Definition",
-		description: "Go to the Rust definition for a symbol name, with optional file or range disambiguation.",
-		promptSnippet: "Go to the Rust definition for a symbol name, preferably scoped to a known file path.",
-		promptGuidelines: ["Use this tool when you know the symbol name; provide path when known, and add line or line/column range only when the lookup is ambiguous."],
+		description: "Find a Rust symbol's definition.",
+		promptSnippet: "Find a Rust symbol's definition.",
 		parameters: SymbolLookupParams,
 		renderCall(args, theme) {
 			return renderToolCallSummary(theme, "lsp_definition", formatLookupScope(args, process.cwd()));
@@ -820,9 +896,9 @@ export default function lspRustAnalyzerExtension(pi: ExtensionAPI) {
 			const position = manager.getDocuments().toLspPosition(synced.path, symbol.line, symbol.character);
 			const raw = await manager.getClient().definition(synced.uri, position, signal);
 			const locations = Array.isArray(raw)
-				? raw.map((item) => ("targetUri" in item ? locationLinkToCompact(item as LspLocationLink) : locationToCompact(item as LspLocation)))
+				? raw.map((item) => (isLocationLink(item) ? locationLinkToCompact(item) : locationToCompact(item)))
 				: raw
-					? ["targetUri" in raw ? locationLinkToCompact(raw as LspLocationLink) : locationToCompact(raw as LspLocation)]
+					? [isLocationLink(raw) ? locationLinkToCompact(raw) : locationToCompact(raw)]
 					: [];
 			const shown = locations.slice(0, limit);
 			const previews = await Promise.all(shown.map(async (item) => ({ location: item, preview: await buildDefinitionPreview(item) })));
@@ -848,9 +924,8 @@ export default function lspRustAnalyzerExtension(pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "lsp_references",
 		label: "LSP References",
-		description: "Find Rust references for a symbol name, with optional file or range disambiguation.",
-		promptSnippet: "Find semantic Rust references for a symbol name, preferably scoped to a known file path.",
-		promptGuidelines: ["Use this tool when you know the symbol name; provide path when known, and add line or line/column range only when the lookup is ambiguous."],
+		description: "Find references to a Rust symbol.",
+		promptSnippet: "Find references to a Rust symbol.",
 		parameters: ReferencesParams,
 		renderCall(args, theme) {
 			return renderToolCallSummary(theme, "lsp_references", formatLookupScope(args, process.cwd()));
@@ -893,9 +968,8 @@ export default function lspRustAnalyzerExtension(pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "lsp_diagnostics",
 		label: "LSP Diagnostics",
-		description: "Rust diagnostics for a file or the tracked Rust document set.",
-		promptSnippet: "Get rust-analyzer diagnostics for a Rust file or the tracked Rust document set.",
-		promptGuidelines: ["Use this tool when asked about Rust compile, type, or borrow-check errors, especially after edits."],
+		description: "Show Rust diagnostics.",
+		promptSnippet: "Show Rust diagnostics.",
 		parameters: DiagnosticsParams,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const result = await manager.explicitDiagnostics(ctx, params);

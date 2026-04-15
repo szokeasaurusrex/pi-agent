@@ -89,7 +89,7 @@ export class DocumentTracker {
 		const normalizedPath = path.normalize(absolutePath);
 		const languageId = inferLanguageId(normalizedPath);
 		if (!languageId) {
-			throw new Error(`Unsupported LSP document path: ${inputPath}`);
+			throw new Error(`Unsupported Rust LSP file path: ${inputPath}`);
 		}
 
 		const fileStat = await stat(normalizedPath);
