@@ -11,8 +11,10 @@ Use this skill when the user asks to split an existing commit or PR into smaller
 
 - Start with a clean worktree and index unless the user explicitly says otherwise.
 - Do not start by editing source files directly. Use the generated one-hunk patches as the extraction source of truth.
-- Every patch must leave `todo/` through exactly one state: `applied/`, `skipped/`, or `partially-applied/`.
-- For `partial`, keep the moved patch as the audit artifact, then make manual edits limited to content from that patch.
+- After setup, do not enumerate `todo/` or read patch files directly. Inspect patches only through `scripts/next-patch.sh`.
+- Process the queue strictly in order. Do not inspect later entries before the current patch leaves `todo/`.
+- Every patch must leave `todo/` through exactly one state: `applied/`, `skipped/`, `partially-applied/`, or `merge-conflicted/`.
+- For `partial`, keep the moved patch as the audit artifact, then reduce that patch to the in-scope subset only. Do not introduce edits that are not already present in the surfaced patch.
 - Validate the repo state before creating final commits.
 
 ## Scripts
@@ -25,10 +27,10 @@ Use this skill when the user asks to split an existing commit or PR into smaller
 
 1. Create the queue from a source commit or revision range.
 2. Run `scripts/next-patch.sh` to get the next patch path and full patch content.
-3. Inspect that patch and choose `apply`, `skip`, or `partial`.
+3. Decide only for that surfaced patch: `apply`, `skip`, or `partial`.
 4. Run `scripts/process-patch.sh` for that action.
-5. If the action is `partial`, the script does not apply changes. It records the patch in `partially-applied/` and tells you to continue with scoped manual edits only for that patch's content.
-6. Do not continue to the next patch until any required manual edits for the current partial patch are complete.
+5. If the action is `partial`, perform the scoped manual edit immediately and keep only the in-scope subset from that patch.
+6. If a patch reaches `merge-conflicted/`, resolve the reported conflicts before continuing.
 7. Repeat until `scripts/next-patch.sh` prints `All patches are processed.`.
 
 ## Example loop
@@ -48,10 +50,13 @@ scripts/process-patch.sh \
   --workdir /tmp/split-commit.ABC123 \
   --patch /tmp/split-commit.ABC123/todo/004-file.patch \
   --action partial
-# then make manual edits limited to that patch before continuing
+# then reduce that surfaced patch to the in-scope subset only
+
+scripts/next-patch.sh --workdir /tmp/split-commit.ABC123
 ```
 
 ## Notes
 
 - `scripts/setup-split-patches.sh` supports `--source <commit-ish>` and also accepts explicit revision ranges.
-- `scripts/next-patch.sh` is also the completion check.
+- `scripts/next-patch.sh` is the only queue inspection entry point and is also the completion check.
+- `scripts/process-patch.sh --action apply` tries normal apply first, then falls back to `git apply --3way`.

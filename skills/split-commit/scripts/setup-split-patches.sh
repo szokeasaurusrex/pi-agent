@@ -77,7 +77,7 @@ else
   fi
 fi
 
-mkdir -p "$workdir/todo" "$workdir/applied" "$workdir/skipped" "$workdir/partially-applied"
+mkdir -p "$workdir/todo" "$workdir/applied" "$workdir/skipped" "$workdir/partially-applied" "$workdir/merge-conflicted" "$workdir/review-required" "$workdir/conflict-details"
 printf '%s\n' "$repo" > "$workdir/repo"
 source_patch="$workdir/source.patch"
 
