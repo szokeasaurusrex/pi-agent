@@ -35,7 +35,7 @@ const AUTO_INJECT_MAX_TEXT_LENGTH = 1_500;
 const DEFAULT_RESULT_LIMIT = 20;
 const MAX_RESULT_LIMIT = 100;
 const RUST_LSP_TOOL_NAMES = ["lsp_find_symbol", "lsp_document_symbols", "lsp_hover", "lsp_definition", "lsp_references", "lsp_diagnostics"];
-const RUST_LSP_APPEND_PROMPT = "Rust LSP tools are available. Prefer them for Rust symbols, hover, definitions, references, and diagnostics.";
+const RUST_LSP_APPEND_PROMPT = "Rust LSP tools are available. Prefer them over rg for Rust symbols, definitions, references, hover, and diagnostics. Use rg for plain-text search.";
 
 const PathParams = Type.Object({
 	path: Type.String({ description: "Rust file path. Leading @ is accepted." }),
@@ -753,8 +753,8 @@ export default function lspRustAnalyzerExtension(pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "lsp_find_symbol",
 		label: "LSP Find Symbol",
-		description: "Find Rust symbols by name.",
-		promptSnippet: "Find Rust symbols by name.",
+		description: "Find Rust symbols by name. Prefer over rg when the symbol is known.",
+		promptSnippet: "Find Rust symbols by name. Prefer over rg when the symbol is known.",
 		parameters: SymbolLookupParams,
 		renderCall(args, theme) {
 			return renderToolCallSummary(theme, "lsp_find_symbol", formatLookupScope(args, process.cwd()));
@@ -871,8 +871,8 @@ export default function lspRustAnalyzerExtension(pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "lsp_definition",
 		label: "LSP Definition",
-		description: "Find a Rust symbol's definition.",
-		promptSnippet: "Find a Rust symbol's definition.",
+		description: "Find a Rust symbol's definition. Prefer over rg for Rust code navigation.",
+		promptSnippet: "Find a Rust symbol's definition. Prefer over rg for Rust code navigation.",
 		parameters: SymbolLookupParams,
 		renderCall(args, theme) {
 			return renderToolCallSummary(theme, "lsp_definition", formatLookupScope(args, process.cwd()));
@@ -924,8 +924,8 @@ export default function lspRustAnalyzerExtension(pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "lsp_references",
 		label: "LSP References",
-		description: "Find references to a Rust symbol.",
-		promptSnippet: "Find references to a Rust symbol.",
+		description: "Find references to a Rust symbol. Prefer over rg for Rust usage checks.",
+		promptSnippet: "Find references to a Rust symbol. Prefer over rg for Rust usage checks.",
 		parameters: ReferencesParams,
 		renderCall(args, theme) {
 			return renderToolCallSummary(theme, "lsp_references", formatLookupScope(args, process.cwd()));
