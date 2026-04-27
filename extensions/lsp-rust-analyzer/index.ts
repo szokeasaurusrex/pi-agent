@@ -35,7 +35,7 @@ const AUTO_INJECT_MAX_TEXT_LENGTH = 1_500;
 const DEFAULT_RESULT_LIMIT = 20;
 const MAX_RESULT_LIMIT = 100;
 const RUST_LSP_TOOL_NAMES = ["lsp_find_symbol", "lsp_document_symbols", "lsp_hover", "lsp_definition", "lsp_references", "lsp_diagnostics"];
-const RUST_LSP_APPEND_PROMPT = "Rust LSP tools are available. Prefer them over rg for Rust symbols, definitions, references, hover, and diagnostics. Use rg for plain-text search.";
+const RUST_LSP_APPEND_PROMPT = "When searching for Rust symbols, use the appropriate LSP tool. Do not use rg, grep, or any other plain text search tool, unless the LSP tool fails to surface the needed information. Always try LSP-based symbol-resolution first.";
 
 const PathParams = Type.Object({
 	path: Type.String({ description: "Rust file path. Leading @ is accepted." }),

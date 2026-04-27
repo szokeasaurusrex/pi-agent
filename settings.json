@@ -10,11 +10,11 @@
       "themes": []
     }
   ],
-  "lastChangelogVersion": "0.67.6",
+  "lastChangelogVersion": "0.70.2",
   "hideThinkingBlock": false,
-  "defaultThinkingLevel": "medium",
-  "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.4",
+  "defaultThinkingLevel": "high",
+  "defaultProvider": "anthropic",
+  "defaultModel": "claude-sonnet-4-6",
   "enabledModels": [
     "openai-codex/gpt-5.4",
     "openai-codex/gpt-5.3-codex-spark",
