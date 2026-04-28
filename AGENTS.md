@@ -1,9 +1,8 @@
 # Environment
 
-- Running in a Docker sandbox.
-- `~` is persisted and synced to host across sessions.
+- Running in a sandbox.
+    - The sandbox config has recently changed. Please report any sandbox boundaries you run into, as they may be due to a misconfiguration which I can resolve.
 - `git` and `gh` use a read-only token (public repos only).
-- On bind-mounted paths, Git may report "dubious ownership". Be aware this can happen; only add repos/worktrees to global safe.directory if that error occurs.
 - Do not attempt `git push` or PR creation; ask the user to run such commands on host with a full-access token.
 
 # Style Preferences

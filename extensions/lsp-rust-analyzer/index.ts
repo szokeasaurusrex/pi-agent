@@ -1,8 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { getMarkdownTheme } from "/usr/local/lib/node_modules/@mariozechner/pi-coding-agent/dist/index.js";
-import { Type } from "@sinclair/typebox";
+import { getMarkdownTheme, type ExtensionAPI, type ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { Type } from "typebox";
 import { Box, Markdown, Text } from "@mariozechner/pi-tui";
 import { RustAnalyzerClient, normalizeHoverContents } from "./client";
 import { DiagnosticsStore } from "./diagnostics";
