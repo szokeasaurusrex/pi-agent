@@ -370,6 +370,7 @@ class RustAnalyzerManager {
 	private readonly pendingTurnRefreshes = new Set<Promise<void>>();
 	private waitingForTurnDiagnostics = false;
 	private diagnosticsInjectedDuringTurnWait = false;
+	private autoActivateAttemptedProjectRoot?: string;
 	private readonly lastAutoInjectedState = new Map<string, { hasProblems: boolean; digest: string }>();
 
 	constructor(pi: ExtensionAPI) {
@@ -396,6 +397,7 @@ class RustAnalyzerManager {
 		this.progress = undefined;
 		this.state = "inactive";
 		this.stateError = undefined;
+		this.autoActivateAttemptedProjectRoot = undefined;
 		this.diagnostics.clear();
 		this.renderStatus();
 	}
@@ -407,6 +409,8 @@ class RustAnalyzerManager {
 			if (!this.project) this.renderStatus();
 			return;
 		}
+		if (this.autoActivateAttemptedProjectRoot === project.rootPath) return;
+		this.autoActivateAttemptedProjectRoot = project.rootPath;
 		try {
 			await this.ensureProject(ctx, project, signal);
 			await this.client?.ensureReady(signal);
@@ -689,23 +693,13 @@ class RustAnalyzerManager {
 	}
 }
 
-async function updateRustLspToolActivation(pi: ExtensionAPI, ctx: ExtensionContext, _signal?: AbortSignal): Promise<{ rustLspActive: boolean }> {
+function setRustLspToolActivation(pi: ExtensionAPI, rustLspActive: boolean): void {
 	const activeTools = new Set(pi.getActiveTools());
-	const project = await discoverRustProject(ctx.cwd);
-	if (!project) {
-		for (const toolName of RUST_LSP_TOOL_NAMES) activeTools.delete(toolName);
-		pi.setActiveTools([...activeTools]);
-		return { rustLspActive: false };
+	for (const toolName of RUST_LSP_TOOL_NAMES) {
+		if (rustLspActive) activeTools.add(toolName);
+		else activeTools.delete(toolName);
 	}
-	const detection = await detectRustAnalyzer();
-	if ("error" in detection) {
-		for (const toolName of RUST_LSP_TOOL_NAMES) activeTools.delete(toolName);
-		pi.setActiveTools([...activeTools]);
-		return { rustLspActive: false };
-	}
-	for (const toolName of RUST_LSP_TOOL_NAMES) activeTools.add(toolName);
 	pi.setActiveTools([...activeTools]);
-	return { rustLspActive: true };
 }
 
 export default function lspRustAnalyzerExtension(pi: ExtensionAPI) {
@@ -718,9 +712,9 @@ export default function lspRustAnalyzerExtension(pi: ExtensionAPI) {
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
-		await updateRustLspToolActivation(pi, ctx, ctx.signal);
 		manager.rememberContext(ctx);
 		await manager.maybeActivateFromCwd(ctx);
+		setRustLspToolActivation(pi, manager.isActive());
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
@@ -729,9 +723,10 @@ export default function lspRustAnalyzerExtension(pi: ExtensionAPI) {
 	});
 
 	pi.on("before_agent_start", async (event, ctx) => {
-		const { rustLspActive } = await updateRustLspToolActivation(pi, ctx, ctx.signal);
 		manager.rememberContext(ctx);
 		await manager.maybeActivateFromCwd(ctx, ctx.signal);
+		const rustLspActive = manager.isActive();
+		setRustLspToolActivation(pi, rustLspActive);
 		if (!rustLspActive) return;
 		return {
 			systemPrompt: `${event.systemPrompt}\n\n${RUST_LSP_APPEND_PROMPT}`,
