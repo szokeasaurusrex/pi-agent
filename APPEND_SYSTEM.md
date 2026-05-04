@@ -3,3 +3,5 @@ For any relative path referenced by a skill (scripts or files), resolve it relat
 Prefer `rg` over `grep` when available.
 
 Use `$TMPDIR` for temporary files. Do not hardcode `/tmp`.
+
+Treat workspace changes between agent turns as intentional user changes. Do not modify them unless explicitly asked. If they appear wrong, ask before changing them.
