@@ -1,6 +1,6 @@
 ---
 name: plan
-description: Use this skill when asked to plan something, or plan and implement.
+description: Use this skill when asked to plan something, or plan and implement. Do not use when asked to implement a plan.
 ---
 
 # Planning
