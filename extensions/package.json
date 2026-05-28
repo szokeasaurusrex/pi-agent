@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "dependencies": {
+    "diff": "8.0.4",
+    "typebox": "^1.1.38"
+  },
+  "devDependencies": {
+    "@types/diff": "7.0.2",
+    "@types/node": "^24.12.4",
+    "typescript": "^5.9.3"
+  }
+}
