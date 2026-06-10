@@ -4,3 +4,4 @@ auth.json
 __pycache__/
 .DS_Store
 /bin
+trust.json
