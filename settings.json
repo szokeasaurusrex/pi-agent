@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "0.79.1",
+  "lastChangelogVersion": "0.80.3",
   "hideThinkingBlock": false,
   "defaultThinkingLevel": "medium",
   "defaultProvider": "openai-codex",
@@ -7,6 +7,10 @@
   "enabledModels": [
     "openai-codex/gpt-5.4",
     "openai-codex/gpt-5.5",
-    "openai-codex/gpt-5.4-mini"
-  ]
+    "openai-codex/gpt-5.4-mini",
+    "anthropic/claude-fable-5",
+    "anthropic/claude-opus-4-8",
+    "anthropic/claude-sonnet-5"
+  ],
+  "theme": "dark"
 }
