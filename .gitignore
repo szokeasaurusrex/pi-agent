@@ -5,3 +5,5 @@ __pycache__/
 .DS_Store
 /bin
 trust.json
+settings.json
+models-store.json
