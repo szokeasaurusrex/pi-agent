@@ -21,10 +21,10 @@ interface ExecSkillScriptInput {
 }
 
 const ExecSkillScriptParams = Type.Object({
-	skill: Type.String({ description: "Skill name, e.g. 'sub-agents'" }),
+	skill: Type.String({ description: "Skill name" }),
 	command: Type.String({
 		description:
-			"Script invocation relative to the skill directory, including arguments, e.g. 'scripts/run-subagent.sh --help'",
+			"Script invocation relative to the skill directory, including arguments, e.g. 'scripts/example.sh --help'",
 	}),
 	timeoutMs: Type.Optional(
 		Type.Number({ description: "Timeout in milliseconds. Optional.", minimum: 1, maximum: 3_600_000 }),
@@ -228,7 +228,7 @@ export default function execSkillScriptExtension(pi: ExtensionAPI) {
 		promptSnippet: "Use this tool when a skill-referenced command invokes an executable by skill-relative path.",
 		promptGuidelines: [
 			"Use this tool when a skill-referenced command invokes an executable by skill-relative path, such as scripts/*, regardless of file extension.",
-			"Pass the skill name and a single script command string, for example skill='sub-agents' and command='scripts/run-subagent.sh --help'.",
+			"Pass the skill name and a single skill-relative script command, for example skill='my-skill' and command='scripts/example.sh --help'.",
 		],
 		parameters: ExecSkillScriptParams as unknown as Parameters<typeof pi.registerTool>[0]["parameters"],
 
